@@ -1,0 +1,5 @@
+model: Qwen/Qwen2.5-7B-Instruct
+gpu: ADA_24
+min_workers: 0
+max_workers: 3
+hf_token: ""
