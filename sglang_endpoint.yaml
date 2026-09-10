@@ -16,38 +16,37 @@ network_volume:
   # After first download, subsequent pods skip the 15–30 min 7B model fetch.
 
 dev_pod:
-  id: e09jxofbvrizd5
-  name: agent-trace-dev-migration
-  image: runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
-  cloud: SECURE  # community cloud has broken GPU passthrough
+  id: jflxlrfgzodxld
+  name: agent-trace-dev
+  image: runpod/pytorch:2.8.0-py3.12-cuda12.8.1-devel-ubuntu24.04
+  cloud: COMMUNITY
   gpu: RTX 4090 (24 GB)
-  ssh_direct: ssh -i ~/.ssh/id_ed25519_runpod root@47.47.180.45 -p 25091
-  ssh_proxy: ssh -i ~/.ssh/id_ed25519_runpod e09jxofbvrizd5-644118ba@ssh.runpod.io
-  public_port_30000: 60048
-  network_volume: samw2fy7d8  # NOT attached yet — attach on next pod creation
+  ssh_direct: ssh root@38.80.152.248 -p 32065 -i ~/.ssh/id_ed25519
+  network_volume: samw2fy7d8  # mounted at /workspace; symlinked → /root/.cache/huggingface/hub
   # KV arithmetic (Qwen2.5-7B): 28 layers × 2 × 4 kv_heads × 128 head_dim × 2 bytes = 56 KB/token
   # 24GB card, ~14GB weights → ~10GB free → 187k token pool by default → nothing ever evicts
   # --max-total-tokens caps pool; 2000 for 0.5B smoke, 20000 for 7B real runs
   #
-  # FlashInfer workaround: pip install sglang[all] pulls torch 2.13+cu130, but the flashinfer
-  # wheel was built for cu124/torch2.4 → nvcc JIT fails with "Unknown option --compress-mode=size"
+  # FlashInfer workaround: new image (PyTorch 2.8+cu128) conflicts with flashinfer wheel
   # Fix: --attention-backend triton --sampling-backend pytorch bypasses all FlashInfer JIT
-  # --tool-call-parser qwen25: without this, Qwen2.5 returns tool calls as JSON
-  # text in the content field instead of the structured tool_calls field;
-  # mini-swe-agent sees no tool_calls and raises RepeatedFormatError.
+  # --tool-call-parser qwen: without this, Qwen2.5 returns tool calls as JSON text in content
+  # field instead of structured tool_calls; mini-swe-agent raises RepeatedFormatError.
+  # (SGLang 0.5.19+ deprecated the alias 'qwen25' → use 'qwen')
+  #
+  # pip install on Ubuntu 24.04 / Python 3.12 needs --break-system-packages
   launch_cmd_smoke: >
     python3 -m sglang.launch_server --model Qwen/Qwen2.5-0.5B-Instruct
     --port 30000 --host 0.0.0.0
     --enable-metrics --max-total-tokens 2000
     --attention-backend triton --sampling-backend pytorch
-    --tool-call-parser qwen25
+    --tool-call-parser qwen
   launch_cmd_real: >
     python3 -m sglang.launch_server --model Qwen/Qwen2.5-7B-Instruct
     --port 30000 --host 0.0.0.0
     --enable-metrics --max-total-tokens 20000
     --attention-backend triton --sampling-backend pytorch
-    --tool-call-parser qwen25
+    --tool-call-parser qwen
 
-# retired pod (EXITED, no volume = data gone)
-retired_pod:
-  id: rwafwtozczvfwo
+retired_pods:
+  - id: rwafwtozczvfwo  # exited, no volume
+  - id: e09jxofbvrizd5  # migrated to jflxlrfgzodxld

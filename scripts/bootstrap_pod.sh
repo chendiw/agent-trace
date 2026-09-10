@@ -1,26 +1,32 @@
 #!/usr/bin/env bash
-# bootstrap_pod.sh — bring a fresh Runpod pytorch:2.4.0-py3.11-cuda12.4.1 pod
-# to full Phase 0 working state.
+# bootstrap_pod.sh — bring a fresh RunPod pytorch pod to full Phase 0 working state.
 #
 # Run once after SSH-ing into a new pod:
 #   bash bootstrap_pod.sh
 #
 # Prerequisites (set at pod creation time in the console):
-#   - Image: runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
-#   - Network volume samw2fy7d8 mounted at /root/.cache/huggingface/hub
+#   - Image: runpod/pytorch:2.8.0-py3.12-cuda12.8.1-devel-ubuntu24.04 (or similar)
+#   - Network volume samw2fy7d8 selected; it mounts at /workspace on Community Cloud
 #   - GPU: RTX 4090
+#
+# After running, symlink /workspace → /root/.cache/huggingface/hub is created so
+# the 7B model weights survive pod termination on the network volume.
 
 set -euo pipefail
 
+echo "=== 0. Symlink network volume as HF cache ==="
+ln -sfn /workspace /root/.cache/huggingface/hub
+
 echo "=== 1. Install SGLang ==="
-pip install --quiet "sglang[all]"
+# --break-system-packages required on Ubuntu 24.04 / Python 3.12
+pip install --break-system-packages --quiet "sglang[all]"
 
 echo "=== 2. Clone agent-trace repo ==="
 git clone --depth 1 https://github.com/chendiw/agent-trace.git /root/agent-trace
 
 echo "=== 3. Clone and install mini-swe-agent ==="
 git clone --depth 1 https://github.com/SWE-agent/mini-swe-agent.git /root/mini-swe-agent
-pip install --quiet -e /root/mini-swe-agent
+pip install --break-system-packages --quiet -e /root/mini-swe-agent
 
 echo "=== 4. Write global mini-swe-agent config ==="
 mkdir -p /root/.config/mini-swe-agent
@@ -38,7 +44,7 @@ nohup python3 -m sglang.launch_server \
     --max-total-tokens 20000 \
     --attention-backend triton \
     --sampling-backend pytorch \
-    --tool-call-parser qwen25 \
+    --tool-call-parser qwen \
     > /root/sglang_7b.log 2>&1 &
 echo "SGLang pid: $!"
 
