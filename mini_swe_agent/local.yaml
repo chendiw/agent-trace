@@ -1,0 +1,12 @@
+model:
+  model_name: openai/Qwen/Qwen2.5-0.5B-Instruct
+  model_kwargs:
+    api_base: http://localhost:30000/v1
+    api_key: "none"
+    drop_params: true
+    temperature: 0
+  cost_tracking: ignore_errors
+agent:
+  cost_limit: 0
+  step_limit: 5
+  mode: yolo

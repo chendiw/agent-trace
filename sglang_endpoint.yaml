@@ -6,14 +6,25 @@ hf_token: ""
 endpoint_id: 500w591boutpzu
 base_url: https://api.runpod.ai/v2/500w591boutpzu/openai/v1
 
+network_volume:
+  id: samw2fy7d8
+  name: agent-trace-models
+  size_gb: 30
+  # Mount at /root/.cache/huggingface/hub/ when creating a new pod so model
+  # weights survive pod termination. Set this in the pod creation form under
+  # "Volume" → select samw2fy7d8 → mount path /root/.cache/huggingface/hub
+  # After first download, subsequent pods skip the 15–30 min 7B model fetch.
+
 dev_pod:
   id: e09jxofbvrizd5
   name: agent-trace-dev-migration
   image: runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
   cloud: SECURE  # community cloud has broken GPU passthrough
+  gpu: RTX 4090 (24 GB)
   ssh_direct: ssh -i ~/.ssh/id_ed25519_runpod root@47.47.180.45 -p 25091
   ssh_proxy: ssh -i ~/.ssh/id_ed25519_runpod e09jxofbvrizd5-644118ba@ssh.runpod.io
   public_port_30000: 60048
+  network_volume: samw2fy7d8  # NOT attached yet — attach on next pod creation
   # KV arithmetic (Qwen2.5-7B): 28 layers × 2 × 4 kv_heads × 128 head_dim × 2 bytes = 56 KB/token
   # 24GB card, ~14GB weights → ~10GB free → 187k token pool by default → nothing ever evicts
   # --max-total-tokens caps pool; 2000 for 0.5B smoke, 20000 for 7B real runs
@@ -21,16 +32,21 @@ dev_pod:
   # FlashInfer workaround: pip install sglang[all] pulls torch 2.13+cu130, but the flashinfer
   # wheel was built for cu124/torch2.4 → nvcc JIT fails with "Unknown option --compress-mode=size"
   # Fix: --attention-backend triton --sampling-backend pytorch bypasses all FlashInfer JIT
+  # --tool-call-parser qwen25: without this, Qwen2.5 returns tool calls as JSON
+  # text in the content field instead of the structured tool_calls field;
+  # mini-swe-agent sees no tool_calls and raises RepeatedFormatError.
   launch_cmd_smoke: >
     python3 -m sglang.launch_server --model Qwen/Qwen2.5-0.5B-Instruct
     --port 30000 --host 0.0.0.0
     --enable-metrics --max-total-tokens 2000
     --attention-backend triton --sampling-backend pytorch
+    --tool-call-parser qwen25
   launch_cmd_real: >
     python3 -m sglang.launch_server --model Qwen/Qwen2.5-7B-Instruct
     --port 30000 --host 0.0.0.0
     --enable-metrics --max-total-tokens 20000
     --attention-backend triton --sampling-backend pytorch
+    --tool-call-parser qwen25
 
 # retired pod (EXITED, no volume = data gone)
 retired_pod:
